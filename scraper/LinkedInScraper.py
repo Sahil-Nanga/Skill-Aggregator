@@ -6,12 +6,15 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import NoSuchElementException
 import time
+
 class LinkedInScraper(BaseScrapper):
     
     job_type_keys = {'Internship':'1','Entry Level':'2','Associate':'3','Mid-Senior Level':'4','Director':'5'}
 
     def __init__(self,job_title,job_location,job_type):
         super().__init__(job_title,job_location,job_type)
+        
+
 
     # changes the url based on the entry fields
     def format_for_url(self):
@@ -27,27 +30,31 @@ class LinkedInScraper(BaseScrapper):
         self.press_job_cards()
     
     def press_job_cards(self):
-        wait = WebDriverWait(self.driver, 3.5) 
+        wait = WebDriverWait(self.driver, 2.5) 
         # Finds the number of job listings available
         rows_no = int(self.driver.find_element(By.CLASS_NAME,'results-context-header__job-count').text)
         for i in range(1,rows_no+1):
             # After the 160 card a load more button must be pressed which then loads 25 more cards
-            if i in range(100,rows_no+1,25):
+            if i in range(100,rows_no+1,5):
                 self.load_more()
 
             item_selector = f'/html/body/div[1]/div/main/section[2]/ul/li[{i}]/div' # sets the job card
             try:
                 item = wait.until(EC.visibility_of_element_located((By.XPATH, item_selector)))
                 item.click()
-                time.sleep(2)
+                time.sleep(1)
+
                 base_info = self.get_metadata(item)
+                if self.check_if_present(base_info[0],base_info[1]) == True:
+                    continue
                 base_info.append(self.get_description())
-                base_info.insert(0,i)
+                id = self.month_date+str(i)
+                base_info.insert(0,int(id))
                 self.store(base_info)
-                time.sleep(2)
+                time.sleep(1.5)
             except TimeoutException: #Some cards are not a div, but are a link so the methods dont work on them
                 continue
-                
+            
         
         self.close_driver()
     
@@ -56,12 +63,20 @@ class LinkedInScraper(BaseScrapper):
         job_title = item.find_element(By.CLASS_NAME,'base-search-card__title').text
         company_name = item.find_element(By.CLASS_NAME,'base-search-card__subtitle').text
         location = item.find_element(By.CLASS_NAME,'job-search-card__location').text
+        link = item.find_element(By.CSS_SELECTOR,'.job-search-card--active > a:nth-child(1)')
+        link = link.get_attribute('href')
         try:
             date_div = item.find_element(By.CLASS_NAME,'job-search-card__listdate')
             date = date_div.get_attribute('datetime')
         except NoSuchElementException:
             date = ""
-        return [job_title,company_name,location,date]
+        try:
+            link = item.find_element(By.CSS_SELECTOR,'.job-search-card--active > a:nth-child(1)')
+            link = link.get_attribute('href')
+        except NoSuchElementException:
+            link = ""
+
+        return[job_title,company_name,location,date,link]
     
     def get_description(self): 
         try:      
